@@ -60,35 +60,97 @@ end
 
 gitlabissues = GitlabIssues.new
 
-priority_low = gitlabissues.group_issues(group, {
-                                           labels: 'Priority: Low'
-                                         })
-puts 'priority_low'
-puts '=' * 50
-pp priority_low
+# priority_low = gitlabissues.group_issues(group, {
+#                                            labels: 'Priority: Low'
+#                                          })
+# puts 'priority_low'
+# puts '=' * 50
+# pp priority_low
 
-discussions_by_user = gitlabissues.discussions(discussion_group_project, discussion_issue_id, {})
-puts 'discussions_by_user'
-puts '=' * 50
-pp discussions_by_user
+# discussions_by_user = gitlabissues.discussions(discussion_group_project, discussion_issue_id, {})
+# puts 'discussions_by_user'
+# puts '=' * 50
+# pp discussions_by_user
 
-discussion_issue = gitlabissues.issue(discussion_group_project, discussion_issue_id)
-puts 'discussion_issue'
-puts '=' * 50
-pp discussion_issue
+# discussion_issue = gitlabissues.issue(discussion_group_project, discussion_issue_id)
+# puts 'discussion_issue'
+# puts '=' * 50
+# pp discussion_issue
 
-priority_low_and_type_feature = gitlabissues.group_issues(group, {
-                                                            labels: 'Priority: Low,Type: Feature'
-                                                          })
-puts 'priority_low_and_type_feature'
-puts '=' * 50
-pp priority_low_and_type_feature
+# priority_low_and_type_feature = gitlabissues.group_issues(group, {
+#                                                             labels: 'Priority: Low,Type: Feature'
+#                                                           })
+# puts 'priority_low_and_type_feature'
+# puts '=' * 50
+# pp priority_low_and_type_feature
 
+
+class GitlabWrapper
+  def initialize
+    clear_cache
+  end
+
+  def clear_cache
+    @cache = {}
+  end
+
+  def query(query)
+    @query = query
+    self
+  end
+
+  def params(*params, **options)
+    @params = params
+    @options = options
+    self
+  end
+
+  def issue(params, options)
+    Gitlab.issue(*params)
+  end
+
+  def group_issues(params, options)
+    result = []
+    Gitlab.group_issues(*params, options).each_page do |items|
+      result += items.map{|item| item.to_hash}
+    end
+    result
+  end
+
+  def issue_notes(params, options)
+    result = []
+    Gitlab.issue_notes(*params, options).each_page do |items|
+      result += items.map{|item| item.to_hash}
+    end
+    result.reject! do |note|
+      note['system'] == true
+    end
+    result
+  end
+
+  def call(options={})
+    new_options = @options.update(options)
+    new_options = new_options.update(per_page: 100)
+    query_id = @query.to_s + @params.hash.to_s + new_options.hash.to_s
+    unless @cache.key?(query_id)
+      @cache[query_id] = self.send(@query, @params, new_options)
+    end
+    @cache[query_id]
+  end
+end
+
+group_issues = GitlabWrapper.new.query(:group_issues).params(group, milestone: nil)
+discussions = GitlabWrapper.new.query(:issue_notes).params(
+  discussion_group_project, discussion_issue_id
+)
+discussion_issue = GitlabWrapper.new.query(:issue).params(
+  discussion_group_project, discussion_issue_id
+)
 puts <<~"EOS"
   - issue数
-    - Priority Low: #{priority_low.count}
-      - うち、Type: Feature: #{priority_low_and_type_feature.count}
-  - コメント数: #{discussions_by_user.count} ( #{discussion_issue['title']} )
+    - Priority Low: #{group_issues.(labels: 'Priority: Low,Type: Feature').count}
+      - うち、Type: Feature: #{group_issues.(labels: 'Priority: Low,Type: Feature').count}
+  - コメント数: #{discussions.().count} ( #{discussion_issue.()['title']} )
 EOS
 
 issues_group_by_epic = {}
