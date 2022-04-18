@@ -1,0 +1,34 @@
+<%
+
+group_issues = GitlabWrapper.new.query(:group_issues).params(group, milestone: nil)
+discussions = GitlabWrapper.new.query(:issue_notes).params(
+  discussion_group_project, discussion_issue_id
+)
+discussion_issue = GitlabWrapper.new.query(:issue).params(
+  discussion_group_project, discussion_issue_id
+)
+
+%>
+- issue数
+- Priority Low: <%= group_issues.(labels: 'Priority: Low,Type: Feature').count %>
+    - うち、Type: Feature: <%= group_issues.(labels: 'Priority: Low,Type: Feature').count %>
+- コメント数: <%= discussions.().count %> ( <%= discussion_issue.()['title'] %> )
+<%
+
+issues_group_by_epic = group_issues.(labels: 'Priority: Low').group_by{|issue|
+  issue.dig('epic', 'title') || "その他"
+}
+
+other_issues = issues_group_by_epic.delete('その他')
+issues_group_by_epic['その他'] = other_issues if other_issues
+
+issues_group_by_epic.each do |epicname, issues|
+  puts "- #{epicname}"
+  issues.each do |issue|
+    puts "  - #{issue['title']}"
+  end
+end
+
+%>
+
+<%= milestone %>
